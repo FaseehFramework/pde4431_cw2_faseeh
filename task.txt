@@ -1,0 +1,31 @@
+Aim  
+The aim of this assignment is to assess your understanding of the principles of robotic manipulators 
+and your ability to model manipulators using Python.  
+Task  
+Your task is to design a manipulator that able to pick up three objects from the floor and place them 
+on three shelves on various heights and location above the floor.  
+The manipulator is to be designed and tested PURELY IN SIMULATION. This is a standard approach in 
+engineering: validating a design before committing to a time-consuming and expensive build. The 
+manipulator is to be modelled as a “stick figure.”  
+At this stage, you are testing the kinematics of the design – the arrangement of links and joints – to 
+see if they can meet the specification. You can model the manipulator as being mounted to a fixed 
+surface. It is not necessary to model the end effector and the puck – you just need to show the 
+location of the end effector is correct. 
+Select the Denevit-Hartenburg parameters of your robot. The robot design must use at least 4-joints 
+and one of them is prismatic joints, these will be the “Kinematic Parameters” input to the Python. 
+Make sure you choose a sensible links length, coordinate system orientation and origin. 
+Run a simulation using plot or any other methods to prove that the robot can reach the required 
+positions (floor level and the three shelves). As a bare minimum, this could be implemented as four 
+buttons on the front panel and, as each one is clicked, the robot pose is displayed reaching the 
+required position. More sophisticated representations will gain higher marks (e.g. animated 
+trajectories or visualizing the links and joints to move in 3D space). 
+Rubric 
+1-4 (Distinction):  
+• The D-H parameters describe an appropriate robot. 
+• The simulation demonstrates the whole animation sequence required to carry out the block
+stacking task OR to visualize the links and joints to move in 3D space. 
+• The video is very clear with appropriate comments.  
+• Your program demonstrates more advanced features such as inverse kinematics and/or 
+adding extra links. 
+• Your program demonstrates your independent study by implementing something relevant 
+not taught in class.
