@@ -75,68 +75,80 @@ class PRRR_Robot:
         
         return p_base, p_lift, p_elbow, p_wrist, p_ee
 
-    def inverse_kinematics(self, x, y, z, target_phi_deg=0):
+    def inverse_kinematics(self, x, y, z, target_phi_deg=None):
         """
-        Solves IK for PRRR.
-        Strategy: Decouple Position and Orientation.
-        1. Z is solved directly by J1.
-        2. We need the Wrist Joint to be at a specific (Wx, Wy) so that
-           the End-Effector reaches (x, y) with angle phi.
+        Solves IK with 'Smart Reach' capabilities.
+        If target_phi_deg is None, it defaults to 0, but can auto-adjust if unreachable.
         """
-        target_phi = np.radians(target_phi_deg)
-
-        # --- STEP 1: SOLVE Z (J1) ---
+        # --- STEP 1: VALIDATE Z ---
         if not (0 <= z <= MAX_Z_HEIGHT):
-            raise ValueError(f"Target Z={z} is out of vertical range [0, {MAX_Z_HEIGHT}]")
+            raise ValueError(f"Target Z={z} is out of vertical range.")
         d1 = z
 
-        # --- STEP 2: CALCULATE WRIST CENTER ---
-        # We want the tool tip at (x,y).
-        # We know the tool length is L_WRIST.
-        # We know the tool angle is target_phi.
-        # So, calculate where the wrist joint MUST be.
-        wx = x - L_WRIST * np.cos(target_phi)
-        wy = y - L_WRIST * np.sin(target_phi)
-
-        # --- STEP 3: SOLVE 2-LINK PLANAR ARM (For Wx, Wy) ---
-        # This is standard trigonometry (Law of Cosines)
-        # Distance from shoulder to wrist center
-        r_sq = wx**2 + wy**2
-        r = np.sqrt(r_sq)
+        # Logic to handle orientation
+        # If user didn't specify phi, we try 0, but we mark it as 'flexible'
+        flexible_phi = (target_phi_deg is None)
+        phi_to_try = 0.0 if target_phi_deg is None else target_phi_deg
         
-        # Reachability Check (Planar)
-        max_reach = L_SHOULDER + L_ELBOW
-        min_reach = abs(L_SHOULDER - L_ELBOW)
+        # Max reach of the first two links (Shoulder + Elbow)
+        max_planar_reach = L_SHOULDER + L_ELBOW
+
+        # --- INTERNAL FUNCTION TO CALCULATE IK ---
+        def calculate_arm_angles(tgt_x, tgt_y, phi_rad):
+            # Calculate Wrist Position
+            wx = tgt_x - L_WRIST * np.cos(phi_rad)
+            wy = tgt_y - L_WRIST * np.sin(phi_rad)
+            
+            # Check reachability of Wrist
+            r_sq = wx**2 + wy**2
+            r = np.sqrt(r_sq)
+            
+            if r > max_planar_reach:
+                return None, None, None, r  # Return failure and distance
+            
+            # Law of Cosines for Theta 2 (Elbow)
+            cos_t2 = (r_sq - L_SHOULDER**2 - L_ELBOW**2) / (2 * L_SHOULDER * L_ELBOW)
+            t2 = np.arccos(np.clip(cos_t2, -1.0, 1.0))
+            
+            # Theta 1 (Shoulder)
+            alpha = np.arctan2(wy, wx)
+            beta = np.arctan2(L_ELBOW * np.sin(t2), L_SHOULDER + L_ELBOW * np.cos(t2))
+            t1 = alpha - beta
+            
+            # Theta 3 (Wrist)
+            t3 = phi_rad - (t1 + t2)
+            
+            return t1, t2, t3, r
+
+        # --- ATTEMPT 1: DESIRED ORIENTATION ---
+        target_phi_rad = np.radians(phi_to_try)
+        theta1, theta2, theta3, dist_err = calculate_arm_angles(x, y, target_phi_rad)
+
+        # If successful, return immediately
+        if theta1 is not None:
+            return d1, theta1, theta2, theta3
+
+        # --- ATTEMPT 2: SMART REACH (AUTO-ORIENT) ---
+        # If Attempt 1 failed, we check if we can reach it by pointing straight at it.
+        # This aligns the Wrist with the Shoulder->Target vector.
         
-        if r > max_reach:
-            raise ValueError(f"Target is too far ({r:.2f} > {max_reach}).")
-        if r < min_reach:
-            raise ValueError(f"Target is too close to base ({r:.2f} < {min_reach}).")
-
-        # Law of Cosines for Elbow Angle (theta2)
-        # r^2 = L1^2 + L2^2 - 2*L1*L2*cos(180 - theta2)
-        # cos(theta2) = (r^2 - L1^2 - L2^2) / (2*L1*L2)
-        cos_theta2 = (r_sq - L_SHOULDER**2 - L_ELBOW**2) / (2 * L_SHOULDER * L_ELBOW)
-        cos_theta2 = np.clip(cos_theta2, -1.0, 1.0) # Numerical safety
+        # Calculate angle to target
+        angle_to_target = np.arctan2(y, x)
         
-        # Two solutions for elbow (Elbow Up / Elbow Down). We pick one.
-        theta2 = np.arccos(cos_theta2) # Positive solution (Elbow Left/Up)
-
-        # Solve for Shoulder Angle (theta1)
-        # Angle to the wrist center
-        alpha = np.arctan2(wy, wx)
-        # Angle offset due to geometry
-        # Law of Sines or Cosines again
-        beta = np.arctan2(L_ELBOW * np.sin(theta2), L_SHOULDER + L_ELBOW * np.cos(theta2))
+        # Check if the TOTAL distance is within (Shoulder + Elbow + Wrist)
+        total_dist = np.sqrt(x**2 + y**2)
+        absolute_max_reach = L_SHOULDER + L_ELBOW + L_WRIST
         
-        theta1 = alpha - beta
+        if total_dist <= absolute_max_reach:
+            print(f"[Smart Reach] Target reachable if we point at it.")
+            print(f"              Overriding Phi: {phi_to_try}° -> {np.degrees(angle_to_target):.1f}°")
+            
+            theta1, theta2, theta3, _ = calculate_arm_angles(x, y, angle_to_target)
+            if theta1 is not None:
+                 return d1, theta1, theta2, theta3
 
-        # --- STEP 4: SOLVE WRIST (J4/Theta3) ---
-        # We want Global Angle = theta1 + theta2 + theta3
-        # So theta3 = Global Angle - (theta1 + theta2)
-        theta3 = target_phi - (theta1 + theta2)
-
-        return d1, theta1, theta2, theta3
+        # --- IF ALL FAILS ---
+        raise ValueError(f"Target unreachable. Wrist dist {dist_err:.2f} > Max {max_planar_reach}")
 
     def interpolate_path(self, target_d1, target_t1, target_t2, target_t3):
         """Generates synchronized joint space trajectory."""
@@ -229,7 +241,7 @@ class PRRR_Robot:
                 
                 # Parse Input
                 x, y, z = parts[0], parts[1], parts[2]
-                phi = parts[3] if len(parts) > 3 else 0.0 # Default to 0 orientation if not given
+                phi = parts[3] if len(parts) > 3 else None # Default to 0 orientation if not given
                 
                 # Calculate IK
                 print(f"Planning move to ({x}, {y}, {z}) with Angle {phi}°...")
