@@ -21,11 +21,11 @@ L3 = 2.5  # Link 3 length
 L4 = 2.0  # Link 4 length (end-effector)
 
 # Joint variables (change these to test different configurations)
-d1 = 2.5              # Prismatic joint displacement (vertical, along z-axis)
-theta1 = np.radians(0)    # Rotation about z0 (base rotation)
-theta2 = np.radians(30)   # Second joint rotation (about z1)
-theta3 = np.radians(45)   # Third joint rotation (about z2)
-theta4 = np.radians(-20)  # Fourth joint rotation (about z3)
+d1 = 3.2              # Prismatic joint displacement (vertical, along z-axis)
+theta1 = np.radians(25)    # Rotation about z0 (base rotation)
+theta2 = np.radians(15)   # Second joint rotation (about z1)
+theta3 = np.radians(50)   # Third joint rotation (about z2)
+theta4 = np.radians(-10)  # Fourth joint rotation (about z3)
 
 # Base position (origin)
 P0 = np.array([0, 0, 0, 1])  # x=0, y=0, z=0, 1
