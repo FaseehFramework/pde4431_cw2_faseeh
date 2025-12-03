@@ -1,0 +1,5 @@
+Link (i),Joint Type,?i? (Angle),di? (Offset),ai? (Length),?i? (Twist)
+1,Prismatic,0,d1?? (Var),0,0
+2,Revolute,?1?? (Var),0,3.5,0
+3,Revolute,?2?? (Var),0,2.5,0
+4,Revolute,?3?? (Var),0,1.5,0
