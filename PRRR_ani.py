@@ -47,7 +47,7 @@ class RobotController:
         self.held_object = None
         self.show_workspace = False
         
-        # 2. Initialize World Objects (Randomized)
+        # 2. Initialize World Objects
         self.init_world()
 
         # 3. Setup Visualization Window (Window 1)
@@ -80,73 +80,106 @@ class RobotController:
         self.yellow_circle = WorldObject('Yellow Circle', 'yellow', 'o', circ_start, circ_dest)
         
         self.world_objects = [self.blue_square, self.green_triangle, self.yellow_circle]
+        
+        print(f"Green Triangle Dest: {tri_dest}")
+        print(f"Yellow Circle Dest: {circ_dest}")
 
     def setup_control_panel(self):
-        self.fig_ctrl = plt.figure(figsize=(5, 6))
+        self.fig_ctrl = plt.figure(figsize=(5, 7)) # Increased height
         self.fig_ctrl.canvas.manager.set_window_title('Command Center')
         
-        # Title
         plt.text(0.5, 0.95, "ROBOT CONTROLS", ha='center', fontsize=14, weight='bold')
         plt.axis('off')
 
-        # Section 1: Visuals
-        ax_chk = plt.axes([0.1, 0.8, 0.4, 0.1])
+        # --- Section 1: Visuals ---
+        ax_chk = plt.axes([0.1, 0.82, 0.4, 0.08])
         self.chk_ws = CheckButtons(ax_chk, ['Show Workspace'], [False])
         self.chk_ws.on_clicked(self.toggle_workspace)
 
-        # Section 2: Automated Tasks
-        plt.text(0.1, 0.75, "Auto-Tasks (Hardcoded)", fontsize=10, weight='bold', transform=self.fig_ctrl.transFigure)
+        # --- Section 2: Auto-Tasks (Individual) ---
+        plt.text(0.1, 0.77, "Individual Tasks", fontsize=10, weight='bold', transform=self.fig_ctrl.transFigure)
         
-        ax_btn_tri = plt.axes([0.1, 0.65, 0.35, 0.08])
+        ax_btn_tri = plt.axes([0.1, 0.68, 0.35, 0.07])
         self.btn_tri = Button(ax_btn_tri, 'Move Triangle', color='lightgreen', hovercolor='0.9')
         self.btn_tri.on_clicked(lambda x: self.run_task(self.green_triangle))
         
-        ax_btn_circ = plt.axes([0.55, 0.65, 0.35, 0.08])
+        ax_btn_circ = plt.axes([0.55, 0.68, 0.35, 0.07])
         self.btn_circ = Button(ax_btn_circ, 'Move Circle', color='khaki', hovercolor='0.9')
         self.btn_circ.on_clicked(lambda x: self.run_task(self.yellow_circle))
 
-        # Section 3: User Task
-        plt.text(0.1, 0.55, "User Task (Blue Square)", fontsize=10, weight='bold', transform=self.fig_ctrl.transFigure)
+        # --- Section 3: Blue Square Control ---
+        plt.text(0.1, 0.60, "Blue Square Control", fontsize=10, weight='bold', transform=self.fig_ctrl.transFigure)
         
-        ax_txt = plt.axes([0.1, 0.48, 0.5, 0.05])
+        ax_txt = plt.axes([0.1, 0.52, 0.5, 0.05])
         self.txt_input = TextBox(ax_txt, 'Dest (x y z): ', initial="0 5 0")
         
-        ax_btn_sq = plt.axes([0.65, 0.48, 0.25, 0.05])
+        ax_btn_sq = plt.axes([0.65, 0.52, 0.25, 0.05])
         self.btn_sq = Button(ax_btn_sq, 'GO', color='lightblue')
         self.btn_sq.on_clicked(self.on_square_submit)
 
-        # Section 4: Global Reset
-        ax_btn_rst = plt.axes([0.1, 0.1, 0.8, 0.1])
+        # --- Section 4: MASTER STACK CONTROL (New) ---
+        plt.text(0.1, 0.42, "Master Stack Control (All 3)", fontsize=10, weight='bold', transform=self.fig_ctrl.transFigure)
+        
+        ax_txt_stack = plt.axes([0.1, 0.34, 0.5, 0.05])
+        self.txt_stack = TextBox(ax_txt_stack, 'Target (x y z): ', initial="4 4 0")
+        
+        ax_btn_stack = plt.axes([0.65, 0.34, 0.25, 0.05])
+        self.btn_stack = Button(ax_btn_stack, 'STACK ALL', color='violet')
+        self.btn_stack.on_clicked(self.on_stack_all_submit)
+
+        # --- Section 5: Reset ---
+        ax_btn_rst = plt.axes([0.1, 0.05, 0.8, 0.1])
         self.btn_rst = Button(ax_btn_rst, 'RESET SIMULATION', color='salmon')
         self.btn_rst.on_clicked(self.reset_sim)
 
-    # --- CORE LOGIC ---
+    # --- LOGIC ---
     def get_smart_z(self, x, y, moving_obj_name):
         """Scans (x,y) for existing objects to stack on."""
         max_h = 0.0
         for obj in self.world_objects:
-            if obj.name == moving_obj_name: continue # Don't check self
+            if obj.name == moving_obj_name: continue
             
-            # Check 2D distance
             dist = np.sqrt((obj.pos[0]-x)**2 + (obj.pos[1]-y)**2)
             if dist < STACK_TOLERANCE:
                 top = obj.pos[2] + obj.height
                 if top > max_h: max_h = top
-                print(f"  [Smart Stack] Detected {obj.name} base at Z={obj.pos[2]:.1f}")
         return max_h
+
+    def on_stack_all_submit(self, event):
+        """Moves ALL objects to the specified X,Y using Smart Stacking."""
+        try:
+            txt = self.txt_stack.text
+            v = [float(x) for x in txt.replace(',', ' ').split()]
+            if len(v) < 2: return
+            
+            tx, ty = v[0], v[1]
+            tz = v[2] if len(v) > 2 else 0.0
+            print(f"\n--- EXECUTING MASTER STACK AT ({tx}, {ty}, {tz}) ---")
+            
+            # Iterate through all objects and move them one by one
+            for obj in self.world_objects:
+                # Check if object is already at target (x, y)
+                dist = np.sqrt((obj.pos[0] - tx)**2 + (obj.pos[1] - ty)**2)
+                if dist < STACK_TOLERANCE:
+                    print(f"Skipping {obj.name} (Already at target)")
+                    continue
+
+                # 1. Calculate the 'Smart Z' for this specific object right now
+                # Logic: max(user_z, existing_stack_height)
+                stack_top_z = self.get_smart_z(tx, ty, obj.name)
+                target_z = max(tz, stack_top_z)
+                
+                print(f"Moving {obj.name} -> Z={target_z:.2f}")
+                self.pick_and_place(obj, tx, ty, target_z)
+                
+        except ValueError:
+            print("Invalid Input for Master Stack")
 
     def run_task(self, obj):
         if obj.dest is None: return
-        # Use Smart Stacking on the hardcoded destination
         base_z = self.get_smart_z(obj.dest[0], obj.dest[1], obj.name)
-        final_z = base_z + obj.dest[2] # Add Hardcoded Offset to the stack base
-        
-        # Override the destination Z with the smart calculation
-        # Note: For Triangle/Circle, the requirement was "Z is at level 2/4".
-        # If we stack, should we add 2 to the stack? Or be at absolute 2?
-        # Logic: We preserve the absolute Z requirement, but lift if stack is higher.
-        target_z = max(obj.dest[2], base_z) 
-        
+        # Requirement: "Z is at level 2/4". If stack is higher, we go higher.
+        target_z = max(obj.dest[2], base_z)
         self.pick_and_place(obj, obj.dest[0], obj.dest[1], target_z)
 
     def on_square_submit(self, event):
@@ -154,11 +187,8 @@ class RobotController:
             txt = self.txt_input.text
             v = [float(x) for x in txt.replace(',', ' ').split()]
             if len(v) < 3: return
-            
-            # Smart Logic for User Input
             base_z = self.get_smart_z(v[0], v[1], self.blue_square.name)
-            target_z = base_z + v[2] # User's Z is treated as offset from whatever is there
-            
+            target_z = max(v[2], base_z)
             self.pick_and_place(self.blue_square, v[0], v[1], target_z)
         except ValueError:
             print("Invalid Input")
@@ -194,7 +224,6 @@ class RobotController:
     def inverse_kinematics(self, x, y, z):
         if not (0 <= z <= MAX_Z_HEIGHT): raise ValueError(f"Z={z} out of range.")
         d1 = z; max_reach = L_SHOULDER + L_ELBOW
-        
         def solve(tx, ty, phi):
             wx, wy = tx - L_WRIST*np.cos(phi), ty - L_WRIST*np.sin(phi)
             r = np.sqrt(wx**2 + wy**2)
@@ -204,17 +233,12 @@ class RobotController:
             t1 = np.arctan2(wy, wx) - np.arctan2(L_ELBOW*np.sin(t2), L_SHOULDER + L_ELBOW*np.cos(t2))
             t3 = phi - (t1+t2)
             return t1, t2, t3
-
-        # 1. Try Orient 0
         t1, t2, t3 = solve(x, y, 0)
         if t1 is not None: return d1, t1, t2, t3
-        
-        # 2. Try Point at Target
         angle = np.arctan2(y, x)
         if np.sqrt(x**2 + y**2) <= MAX_REACH:
             t1, t2, t3 = solve(x, y, angle)
             if t1 is not None: return d1, t1, t2, t3
-            
         raise ValueError("Unreachable")
 
     def move_to(self, x, y, z):
@@ -224,13 +248,10 @@ class RobotController:
             max_ang_diff = max(abs(tt1-self.theta1), abs(tt2-self.theta2), abs(tt3-self.theta3))
             steps = int(max(abs(delta_d)/STEP_SIZE_LIN, np.degrees(max_ang_diff)/STEP_SIZE_ANG))
             if steps < 2: steps = 2
-            
-            # Linear interpolation
             traj_d = np.linspace(self.d1, td1, steps)
             traj_t1 = np.linspace(self.theta1, tt1, steps)
             traj_t2 = np.linspace(self.theta2, tt2, steps)
             traj_t3 = np.linspace(self.theta3, tt3, steps)
-            
             for d, t1, t2, t3 in zip(traj_d, traj_t1, traj_t2, traj_t3):
                 self.d1, self.theta1, self.theta2, self.theta3 = d, t1, t2, t3
                 if self.held_object:
@@ -238,18 +259,13 @@ class RobotController:
                     self.held_object.pos = pee 
                 self.draw_scene()
             return True
-        except ValueError:
-            print("Move failed")
-            return False
+        except ValueError: return False
 
     def pick_and_place(self, obj, dx, dy, dz):
         sx, sy, sz = obj.pos
-        # Calculated Heights
         lift_z = min(sz + SAFE_HOVER_HEIGHT, MAX_Z_HEIGHT)
         drop_hover_z = min(dz + SAFE_HOVER_HEIGHT, MAX_Z_HEIGHT)
         travel_z = max(lift_z, drop_hover_z)
-        
-        # Sequence
         if not self.move_to(sx, sy, lift_z): return
         if not self.move_to(sx, sy, sz): return
         self.held_object = obj; obj.color = 'red'; time.sleep(0.1)
@@ -258,7 +274,6 @@ class RobotController:
         if not self.move_to(dx, dy, drop_hover_z): return
         if not self.move_to(dx, dy, dz): return
         self.held_object = None; 
-        # Restore Colors
         obj.color = 'blue' if 'Square' in obj.name else ('green' if 'Triangle' in obj.name else 'yellow')
         time.sleep(0.1)
         self.move_to(dx, dy, drop_hover_z)
@@ -269,37 +284,53 @@ class RobotController:
         self.ax.set_xlim(-8, 8); self.ax.set_ylim(-8, 8); self.ax.set_zlim(0, 6)
         self.ax.set_xlabel('X'); self.ax.set_ylabel('Y'); self.ax.set_zlabel('Z')
         self.ax.set_title("Robot Visualization")
-        
-        # Workspace Overlay
         if self.show_workspace:
             X, Y, Z = self.ws_mesh
             self.ax.plot_surface(X, Y, Z, color='yellow', alpha=0.1)
 
-        # Robot Links
+        # --- DRAW ROBOT ---
         p0, p1, p2, p3, p4 = self.forward_kinematics(self.d1, self.theta1, self.theta2, self.theta3)
-        self.ax.plot([0,0], [0,0], [0, MAX_Z_HEIGHT], 'k--', alpha=0.3)
-        self.ax.plot([p0[0], p1[0]], [p0[1], p1[1]], [p0[2], p1[2]], 'k-', lw=6)
-        self.ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], 'b-', lw=4)
-        self.ax.plot([p2[0], p3[0]], [p2[1], p3[1]], [p2[2], p3[2]], 'g-', lw=4)
-        self.ax.plot([p3[0], p4[0]], [p3[1], p4[1]], [p3[2], p4[2]], 'r-', lw=2)
         
-        # Robot Joints
-        self.ax.scatter(*p1, s=100, c='k', marker='s')
-        self.ax.scatter(*p2, s=80, c='b')
-        self.ax.scatter(*p3, s=80, c='g')
+        # Links
+        # Link 1 (Prismatic d1): p0 -> p1
+        self.ax.plot([p0[0], p1[0]], [p0[1], p1[1]], [p0[2], p1[2]], 'k-', linewidth=5, label='Link 1')
+        # Link 2 (Shoulder): p1 -> p2
+        self.ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]], 'b-', linewidth=5, label='Link 2')
+        # Link 3 (Elbow): p2 -> p3
+        self.ax.plot([p2[0], p3[0]], [p2[1], p3[1]], [p2[2], p3[2]], 'r-', linewidth=5, label='Link 3')
+        # Link 4 (Wrist): p3 -> p4
+        self.ax.plot([p3[0], p4[0]], [p3[1], p4[1]], [p3[2], p4[2]], 'g-', linewidth=5, label='Link 4')
 
-        # Objects & Targets
+        # Joints
+        self.ax.scatter([p0[0]], [p0[1]], [p0[2]], c='k', s=100)
+        self.ax.scatter([p1[0]], [p1[1]], [p1[2]], c='k', s=100)
+        self.ax.scatter([p2[0]], [p2[1]], [p2[2]], c='b', s=80)
+        self.ax.scatter([p3[0]], [p3[1]], [p3[2]], c='r', s=80)
+        self.ax.scatter([p4[0]], [p4[1]], [p4[2]], c='g', s=80)
+
+        # --- DRAW OBJECTS ---
         for obj in self.world_objects:
-            self.ax.scatter(*obj.pos, s=200, marker=obj.marker, c=obj.color, edgecolors='k', alpha=1.0)
+            # If object is held, it's at the end-effector (p4)
+            if self.held_object == obj:
+                pos = p4
+            else:
+                pos = obj.pos
+            
+            self.ax.scatter([pos[0]], [pos[1]], [pos[2]], 
+                            c=obj.color, marker=obj.marker, s=200, 
+                            edgecolors='k', label=obj.name)
+            
+            # Draw destination ghost if it exists
             if obj.dest is not None:
-                self.ax.scatter(*obj.dest, c='red', marker='x', s=40)
-                lbl = "Tri Shelf" if 'Triangle' in obj.name else "Circ Shelf"
-                self.ax.text(obj.dest[0], obj.dest[1], obj.dest[2], lbl, fontsize=8, color='red')
+                self.ax.scatter([obj.dest[0]], [obj.dest[1]], [obj.dest[2]], 
+                                c=obj.color, marker=obj.marker, s=50, alpha=0.3)
+        
+        plt.draw()
+        plt.pause(0.001)
 
-        self.fig_viz.canvas.draw()
-        self.fig_viz.canvas.flush_events()
-
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
 if __name__ == "__main__":
-    app = RobotController()
-    print("Simulation Started.")
+    robot = RobotController()
     plt.show()
