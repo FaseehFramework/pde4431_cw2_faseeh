@@ -59,6 +59,8 @@ The simulation opens two windows:
 - Objects displayed with their respective colors and shapes
 - Ghost markers (faded) show destination positions
 
+![alt text](https://github.com/FaseehFramework/pde4431_cw2_faseeh/blob/master/images/viz%20window.png?raw=true "Visualization Window")
+
 ### 2. Command Center (Control Panel)
 
 | Section | Control | Description |
@@ -69,6 +71,8 @@ The simulation opens two windows:
 | **Blue Square Control** | Dest (x y z) + GO | Move blue square to specified user inputted coordinates |
 | **Master Stack Control** | Target (x y z) + STACK ALL | Stack all objects at specified location |
 | **Reset** | RESET SIMULATION | Reset all objects and robot to initial state |
+
+![alt text](https://github.com/FaseehFramework/pde4431_cw2_faseeh/blob/master/images/cmd%20center.png?raw=true "Command Center")
 
 ## Objects
 
