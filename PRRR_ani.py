@@ -21,6 +21,11 @@ MAX_Z_HEIGHT = 5.0
 L_SHOULDER, L_ELBOW, L_WRIST = 3.5, 2.5, 1.5
 MAX_REACH = L_SHOULDER + L_ELBOW + L_WRIST
 
+# Workspace Boundaries
+WORKSPACE_X_MIN, WORKSPACE_X_MAX = -7.0, 7.0
+WORKSPACE_Y_MIN, WORKSPACE_Y_MAX = -7.0, 7.0
+WORKSPACE_Z_MIN, WORKSPACE_Z_MAX = 0.0, MAX_Z_HEIGHT
+
 # Simulation Settings
 STEP_SIZE_ANG = 5.0 
 STEP_SIZE_LIN = 0.2
@@ -66,17 +71,17 @@ class RobotController:
 
     def init_world(self):
         # Blue Square (User Input)
-        sq_pos = [random.uniform(3, 6), random.uniform(-3, 3), 0.0]
+        sq_pos = [random.uniform(0, 6), random.uniform(-3, 3), 0.0]
         self.blue_square = WorldObject('Blue Square', 'blue', 's', sq_pos)
 
         # Green Triangle (Random Dest Z=2)
-        tri_start = [random.uniform(3, 6), random.uniform(-3, 3), 0.0]
-        tri_dest = [random.uniform(-4, 4), random.uniform(-4, 4), 2.0]
+        tri_start = [random.uniform(0, 6), random.uniform(-3, 3), 0.0]
+        tri_dest = [random.uniform(-5, 5), random.uniform(-5, 5), 2.0]
         self.green_triangle = WorldObject('Green Triangle', 'green', '^', tri_start, tri_dest)
 
         # Yellow Circle (Random Dest Z=4)
-        circ_start = [random.uniform(3, 6), random.uniform(-3, 3), 0.0]
-        circ_dest = [random.uniform(-4, 4), random.uniform(-4, 4), 4.0]
+        circ_start = [random.uniform(0, 6), random.uniform(-3, 3), 0.0]
+        circ_dest = [random.uniform(-5, 5), random.uniform(-5, 5), 4.0]
         self.yellow_circle = WorldObject('Yellow Circle', 'yellow', 'o', circ_start, circ_dest)
         
         self.world_objects = [self.blue_square, self.green_triangle, self.yellow_circle]
@@ -154,6 +159,12 @@ class RobotController:
             
             tx, ty = v[0], v[1]
             tz = v[2] if len(v) > 2 else 0.0
+            
+            # Check if target is within workspace
+            if not self.is_within_workspace(tx, ty, tz):
+                print("Outside workspace , cannot reach")
+                return
+            
             print(f"\n--- EXECUTING MASTER STACK AT ({tx}, {ty}, {tz}) ---")
             
             # Iterate through all objects and move them one by one
@@ -177,6 +188,12 @@ class RobotController:
 
     def run_task(self, obj):
         if obj.dest is None: return
+        
+        # Check if destination is within workspace
+        if not self.is_within_workspace(obj.dest[0], obj.dest[1], obj.dest[2]):
+            print("Outside workspace , cannot reach")
+            return
+        
         base_z = self.get_smart_z(obj.dest[0], obj.dest[1], obj.name)
         # Requirement: "Z is at level 2/4". If stack is higher, we go higher.
         target_z = max(obj.dest[2], base_z)
@@ -187,11 +204,24 @@ class RobotController:
             txt = self.txt_input.text
             v = [float(x) for x in txt.replace(',', ' ').split()]
             if len(v) < 3: return
+            
+            # Check if destination is within workspace
+            if not self.is_within_workspace(v[0], v[1], v[2]):
+                print("Outside workspace , cannot reach")
+                return
+            
             base_z = self.get_smart_z(v[0], v[1], self.blue_square.name)
             target_z = max(v[2], base_z)
             self.pick_and_place(self.blue_square, v[0], v[1], target_z)
         except ValueError:
             print("Invalid Input")
+
+    def is_within_workspace(self, x, y, z):
+        """Check if a position is within the robot's reachable workspace."""
+        within_x = WORKSPACE_X_MIN <= x <= WORKSPACE_X_MAX
+        within_y = WORKSPACE_Y_MIN <= y <= WORKSPACE_Y_MAX
+        within_z = WORKSPACE_Z_MIN <= z <= WORKSPACE_Z_MAX
+        return within_x and within_y and within_z
 
     def toggle_workspace(self, event):
         self.show_workspace = not self.show_workspace
@@ -262,6 +292,14 @@ class RobotController:
         except ValueError: return False
 
     def pick_and_place(self, obj, dx, dy, dz):
+        # EARLY VALIDATION: Check if destination is reachable before lifting object
+        try:
+            # Test if IK can solve for destination
+            self.inverse_kinematics(dx, dy, dz)
+        except ValueError:
+            print("Outside workspace , cannot reach")
+            return
+        
         sx, sy, sz = obj.pos
         lift_z = min(sz + SAFE_HOVER_HEIGHT, MAX_Z_HEIGHT)
         drop_hover_z = min(dz + SAFE_HOVER_HEIGHT, MAX_Z_HEIGHT)
