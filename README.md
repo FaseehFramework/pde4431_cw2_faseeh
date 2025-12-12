@@ -360,5 +360,5 @@ PRRR_ani.py
 
 Educational use for PDE4431 coursework.
 
-##References
+## References
 https://github.com/judhi/kinematics
