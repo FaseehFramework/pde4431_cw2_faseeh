@@ -2,6 +2,8 @@
 
 An interactive 3D simulation of a PRRR (Prismatic-Revolute-Revolute-Revolute) 4-DOF robot manipulator with pick-and-place capabilities and smart stacking logic.
 
+# Video Demo link[https://www.youtube.com/watch?v=pQ4eXLlYepU]
+
 # IMPORTANT
 
 Please do not move mouse while the simulation is running over the command center window. It may cause unexpected behavior. Or you may drag the cursor outside the command center window.
